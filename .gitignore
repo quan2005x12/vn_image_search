@@ -1,0 +1,30 @@
+# Thư mục môi trường ảo
+.venv/
+backend/.venv/
+venv/
+env/
+
+# Thư viện Frontend
+node_modules/
+frontend/node_modules/
+dist/
+
+# File AI và dữ liệu nặng
+*.keras
+*.pkl
+*.h5
+*.db
+*.pyc
+__pycache__/
+
+# Thư mục dataset ảnh (quá lớn cho git)
+datasets/
+backend/datasets/
+backend/dataset/
+
+# Thư mục cài đặt IDE
+.vscode/
+.idea/
+
+# File hệ thống
+.gitattributes
