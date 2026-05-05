@@ -1,7 +1,10 @@
 import os
 import io
+import sys
 import json
 import pickle
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
