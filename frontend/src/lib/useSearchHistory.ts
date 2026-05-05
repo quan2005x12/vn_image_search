@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { HistoryItem, SearchResultItem } from '../types';
+import { compressImage } from './utils';
 
 const STORAGE_KEY = 'vn_food_search_history';
 const MAX_HISTORY = 50;
@@ -29,11 +30,19 @@ export function useSearchHistory() {
     saveHistory(history);
   }, [history]);
 
-  const addSearch = useCallback((
+  const addSearch = useCallback(async (
     uploadedImage: string,
     results: SearchResultItem[],
   ) => {
     if (results.length === 0) return;
+
+    // Nén ảnh user upload thành thumbnail cực nhỏ (~10-20KB) để lưu localStorage an toàn
+    let thumbnail = uploadedImage;
+    try {
+      thumbnail = await compressImage(uploadedImage, 300);
+    } catch (e) {
+      console.warn("Failed to compress thumbnail, using original (risky for localStorage)", e);
+    }
 
     const topResult = results[0];
     const newItem: HistoryItem = {
@@ -41,7 +50,7 @@ export function useSearchHistory() {
       dish_name: topResult.dish_name,
       similarity: topResult.similarity,
       image_url: topResult.image_url,
-      uploadedImage,
+      uploadedImage: thumbnail,
       timestamp: Date.now(),
       topResults: results.slice(0, 5),
     };

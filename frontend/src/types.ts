@@ -8,7 +8,10 @@ export type { SearchResultItem };
 /** State truyền từ Home → DiscoveryResults qua react-router */
 export interface SearchNavigationState {
   results: SearchResultItem[];
-  uploadedImage: string; // base64 data URL của ảnh user đã upload
+  uploadedImage: string; // base64/blob data URL của ảnh user đã upload
+  predicted_dish?: string;
+  majority_votes?: number;
+  vote_count?: number;
 }
 
 /** State truyền từ DiscoveryResults → DishDetail qua react-router */

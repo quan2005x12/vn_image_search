@@ -85,8 +85,23 @@ export default function History() {
                       </div>
                     </div>
 
-                    <div className="text-primary/20 group-hover:text-primary transition-colors flex-shrink-0">
-                      <ChevronRight size={28} />
+                    <div className="flex flex-col items-center gap-4 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (confirm('Bạn có chắc muốn xóa mục này khỏi lịch sử?')) {
+                            removeItem(item.id);
+                          }
+                        }}
+                        className="p-2 text-on-surface-variant/20 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                        title="Xóa mục này"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                      <div className="text-primary/20 group-hover:text-primary transition-colors">
+                        <ChevronRight size={24} />
+                      </div>
                     </div>
                   </Link>
                 </motion.div>

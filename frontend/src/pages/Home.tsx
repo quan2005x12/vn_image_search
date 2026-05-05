@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Camera, ChevronRight, Verified, Sparkles, X, UploadCloud, Loader2 } from 'lucide-react';
+import { Camera, ChevronRight, Verified, Sparkles, X, UploadCloud, Loader2, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { searchByImage } from '../lib/api';
 import { useSearchHistory } from '../lib/useSearchHistory';
+import { compressImage } from '../lib/utils';
 import type { SearchNavigationState, HistoryItem } from '../types';
 
 export default function Home() {
@@ -11,20 +12,61 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [kValue, setKValue] = useState<number>(10);
+  const [loadingStep, setLoadingStep] = useState<string>('Đang khởi tạo...');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { history, addSearch } = useSearchHistory();
 
+  // Quản lý Object URL để tránh rò rỉ bộ nhớ
+  React.useEffect(() => {
+    return () => {
+      if (selectedImage && selectedImage.startsWith('blob:')) {
+        URL.revokeObjectURL(selectedImage);
+      }
+    };
+  }, [selectedImage]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      setError(null);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      processFile(file);
+    }
+  };
+
+  const processFile = (file: File) => {
+    setSelectedFile(file);
+    setError(null);
+    
+    // Thu hồi URL cũ nếu có
+    if (selectedImage && selectedImage.startsWith('blob:')) {
+      URL.revokeObjectURL(selectedImage);
+    }
+    
+    // Tạo URL mới cực ngắn (blob:) thay vì Base64 cực dài
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedImage(objectUrl);
+  };
+
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      processFile(file);
+    } else {
+      setError('Vui lòng chỉ tải lên tệp tin hình ảnh.');
     }
   };
 
@@ -41,20 +83,27 @@ export default function Home() {
     setError(null);
 
     try {
-      const data = await searchByImage(selectedFile);
+      setLoadingStep('Đang gửi ảnh lên Server...');
+      const data = await searchByImage(selectedFile, kValue, (step) => {
+        setLoadingStep(step);
+      });
       
       if (data.error) {
         setError(data.error);
         return;
       }
 
-      // Lưu vào lịch sử
-      addSearch(selectedImage, data.results);
+      // 1. Tạo thumbnail nhỏ để lưu lịch sử và truyền qua State (tránh lỗi revoke URL khi unmount)
+      const thumbnail = await compressImage(selectedImage, 400);
+      await addSearch(thumbnail, data.results);
 
-      // Navigate đến trang kết quả
+      // 2. Navigate đến trang kết quả
       const state: SearchNavigationState = {
         results: data.results,
-        uploadedImage: selectedImage,
+        uploadedImage: thumbnail,
+        predicted_dish: data.predicted_dish,
+        majority_votes: data.majority_votes,
+        vote_count: data.vote_count,
       };
       navigate('/results', { state });
     } catch (err: any) {
@@ -79,7 +128,7 @@ export default function Home() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-5xl md:text-7xl font-bold leading-[1.1] text-on-surface"
             >
-              Ẩm Thực Việt Nam
+              Hệ Thống Tra Cứu Món Ăn Việt Nam
             </motion.h1>
             <p className="text-xl md:text-2xl font-serif italic text-primary">Tinh hoa hội tụ, đậm đà bản sắc</p>
           </div>
@@ -112,8 +161,12 @@ export default function Home() {
         <div className="relative group">
           <div 
             onClick={handleUploadClick}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             className={`w-full aspect-[4/5] sm:aspect-[16/9] md:aspect-[21/7] rounded-[2.5rem] overflow-hidden transition-all duration-500 cursor-pointer relative
               ${selectedImage ? 'bg-black' : 'bg-surface-container-high outline-dashed outline-2 outline-outline/30 hover:bg-surface-container hover:scale-[1.01] flex flex-col items-center justify-center p-6 sm:p-8 text-center'}
+              ${isDragging ? 'ring-4 ring-primary ring-inset bg-primary/5' : ''}
             `}
           >
             <AnimatePresence mode="wait">
@@ -143,8 +196,8 @@ export default function Home() {
                         <Loader2 size={40} />
                       </motion.div>
                       <div className="space-y-2 text-center">
-                        <p className="font-bold tracking-widest uppercase text-sm">Đang phân tích...</p>
-                        <p className="text-white/60 text-xs">AI đang nhận diện món ăn của bạn</p>
+                        <p className="font-bold tracking-widest uppercase text-sm">{loadingStep}</p>
+                        <p className="text-white/60 text-xs">Vui lòng đợi trong giây lát</p>
                       </div>
                     </div>
                   ) : (
@@ -204,8 +257,27 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* Action Button */}
-          <div className="mt-12 flex justify-center">
+          {/* Action Button & K Selector */}
+          <div className="mt-8 flex flex-col md:flex-row items-center justify-center gap-6">
+            <div className={`flex items-center gap-3 bg-surface-container-high px-6 py-4 rounded-2xl transition-opacity duration-300 ${isSearching ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+              <Settings2 size={20} className="text-on-surface-variant" />
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Số lượng kết quả (K)
+                </label>
+                <select 
+                  value={kValue} 
+                  onChange={(e) => setKValue(Number(e.target.value))}
+                  className="bg-transparent text-sm font-bold text-on-surface outline-none cursor-pointer"
+                >
+                  <option value={5}>5 ảnh (Nhanh)</option>
+                  <option value={10}>10 ảnh (Khuyên dùng)</option>
+                  <option value={20}>20 ảnh</option>
+                  <option value={50}>50 ảnh (Đánh giá sâu)</option>
+                </select>
+              </div>
+            </div>
+
             <motion.div
               whileHover={selectedImage && !isSearching ? { scale: 1.05 } : {}}
               whileTap={selectedImage && !isSearching ? { scale: 0.95 } : {}}
@@ -222,7 +294,7 @@ export default function Home() {
               <button 
                 onClick={handleSearch}
                 disabled={!selectedImage || isSearching}
-                className={`relative px-12 py-5 font-bold rounded-2xl shadow-xl transition-all duration-500 flex items-center gap-3 group
+                className={`relative px-10 md:px-12 py-4 md:py-5 font-bold rounded-2xl shadow-xl transition-all duration-500 flex items-center gap-3 group
                   ${selectedImage && !isSearching
                     ? 'bg-gradient-to-r from-primary to-primary-container text-on-primary ring-4 ring-primary/10' 
                     : 'bg-surface-container-highest text-on-surface-variant/40 cursor-not-allowed grayscale'
@@ -232,7 +304,7 @@ export default function Home() {
                 {isSearching ? (
                   <>
                     <Loader2 size={20} className="animate-spin" />
-                    <span>Đang nhận diện...</span>
+                    <span>Đang xử lý...</span>
                   </>
                 ) : (
                   <>

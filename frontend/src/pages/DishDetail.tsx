@@ -2,34 +2,16 @@ import { Heart, MapPin, ArrowRight, ArrowLeft, Leaf, Utensils, Zap, Beef } from 
 import { motion } from 'motion/react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
 import { getImageUrl } from '../lib/api';
+import { useFavorites } from '../lib/useFavorites';
 import type { DishDetailNavigationState, Ingredient, RecipeStep } from '../types';
 
-const DISH_INGREDIENTS: Record<string, Ingredient[]> = {
-  'Phở': [
-    { name: 'Thịt bò', icon: Beef, description: 'Thịt bò tái hoặc chín, thái lát mỏng.' },
-    { name: 'Bánh phở', icon: Zap, description: 'Sợi phở tươi mềm mịn, làm từ gạo.' },
-    { name: 'Rau thơm', icon: Leaf, description: 'Húng quế, ngò gai, giá đỗ tươi.' },
-  ],
-  'Bún Bò Huế': [
-    { name: 'Thịt bò bắp', icon: Beef, description: 'Thịt bò bắp hầm mềm, thái lát.' },
-    { name: 'Sả', icon: Zap, description: 'Sả tươi đập dập, hương thơm đặc trưng.' },
-    { name: 'Rau sống', icon: Leaf, description: 'Bắp chuối, rau muống, kinh giới.' },
-  ],
-  'Cơm Tấm': [
-    { name: 'Sườn nướng', icon: Beef, description: 'Sườn heo ướp mắm, nướng than hoa.' },
-    { name: 'Cơm tấm', icon: Zap, description: 'Gạo tấm nấu tơi, thơm dẻo.' },
-    { name: 'Đồ chua', icon: Leaf, description: 'Cà rốt, củ cải trắng ngâm giấm.' },
-  ],
+import DISH_DATA from '../data/dishes.json';
+
+const ICON_MAP: Record<string, any> = {
+  Leaf, Utensils, Zap, Beef
 };
 
-const DISH_RECIPES: Record<string, RecipeStep[]> = {
-  'Phở': [
-    { step: '01', title: 'Ninh xương', desc: 'Ninh xương bò với gừng nướng, hành nướng trong 6-8 tiếng.' },
-    { step: '02', title: 'Nêm nếm gia vị', desc: 'Thêm hoa hồi, quế, thảo quả và nước mắm ngon.' },
-    { step: '03', title: 'Chần bánh phở', desc: 'Chần bánh phở tươi qua nước sôi, xếp vào tô cùng thịt bò.' },
-    { step: '04', title: 'Trình bày', desc: 'Chan nước dùng nóng, thêm hành lá, ngò, ăn kèm giá đỗ và chanh.' },
-  ],
-};
+const getIcon = (name: string) => ICON_MAP[name] || Utensils;
 
 export default function DishDetail() {
   const location = useLocation();
@@ -40,10 +22,18 @@ export default function DishDetail() {
   }
 
   const { dish_name, similarity, image_url, allResults } = state;
+  const { isFavorite, toggleFavorite } = useFavorites();
+  
   const imageFullUrl = getImageUrl(image_url);
-  const ingredients = DISH_INGREDIENTS[dish_name] || [];
-  const recipeSteps = DISH_RECIPES[dish_name] || [];
+  
+  const dishInfo = (DISH_DATA as any)[dish_name];
+  const ingredients = dishInfo?.ingredients || [];
+  const recipeSteps = dishInfo?.recipe || [];
+  const description = dishInfo?.description || `${dish_name} là một trong những món ăn truyền thống nổi tiếng của Việt Nam, mang đậm hương vị và bản sắc văn hóa ẩm thực dân tộc.`;
+
   const similarDishes = allResults.filter(r => r.image_url !== image_url).slice(0, 4);
+
+  const favorited = isFavorite(dish_name);
 
   return (
     <div className="space-y-8 md:space-y-12 pb-24">
@@ -66,8 +56,17 @@ export default function DishDetail() {
                 {(similarity * 100).toFixed(1)}% tương đồng
               </span>
             </div>
-            <button className="flex items-center gap-3 px-6 md:px-10 py-3 md:py-5 bg-white text-on-surface font-bold rounded-full shadow-2xl hover:bg-primary hover:text-white active:scale-95 transition-all uppercase tracking-widest text-[10px] md:text-xs">
-              <Heart size={18} /> Lưu vào yêu thích
+            <button 
+              onClick={() => toggleFavorite({ dish_name, image_url, timestamp: Date.now() })}
+              className={`flex items-center gap-3 px-6 md:px-10 py-3 md:py-5 font-bold rounded-full shadow-2xl active:scale-95 transition-all uppercase tracking-widest text-[10px] md:text-xs
+                ${favorited 
+                  ? 'bg-red-500 text-white hover:bg-red-600' 
+                  : 'bg-white text-on-surface hover:bg-primary hover:text-white'
+                }
+              `}
+            >
+              <Heart size={18} className={favorited ? 'fill-current' : ''} />
+              {favorited ? 'Đã lưu yêu thích' : 'Lưu vào yêu thích'}
             </button>
           </div>
         </div>
@@ -82,7 +81,7 @@ export default function DishDetail() {
               <h2 className="text-3xl md:text-4xl font-bold italic tracking-tight">{dish_name}</h2>
             </div>
             <div className="space-y-4 md:space-y-6 text-lg md:text-xl text-on-surface-variant leading-relaxed font-body">
-              <p className="italic">{dish_name} là một trong những món ăn truyền thống nổi tiếng của Việt Nam, mang đậm hương vị và bản sắc văn hóa ẩm thực dân tộc.</p>
+              <p className="italic">{description}</p>
               <p>Mỗi vùng miền lại có cách chế biến riêng, tạo nên sự đa dạng và phong phú cho nền ẩm thực Việt.</p>
             </div>
           </section>
@@ -104,7 +103,10 @@ export default function DishDetail() {
                   <motion.div key={ing.name} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }} className="relative group/tip">
                     <div className="bg-white p-6 md:p-8 rounded-2xl md:rounded-3xl border border-outline/5 text-center space-y-3 md:space-y-4 shadow-sm hover:shadow-xl transition-all h-full cursor-help">
                       <div className="w-12 h-12 md:w-16 md:h-16 bg-primary/5 rounded-full flex items-center justify-center mx-auto">
-                        <ing.icon size={28} className="text-primary" />
+                        {(() => {
+                          const Icon = getIcon(ing.icon);
+                          return <Icon size={28} className="text-primary" />;
+                        })()}
                       </div>
                       <p className="font-bold text-lg md:text-xl text-on-surface leading-snug">{ing.name}</p>
                     </div>
@@ -194,7 +196,9 @@ export default function DishDetail() {
               <div className="space-y-4">
                 {similarDishes.map((dish, i) => (
                   <Link key={`${dish.image_url}-${i}`} to="/detail" state={{ dish_name: dish.dish_name, similarity: dish.similarity, image_url: dish.image_url, allResults }} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/80 transition-all group">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
+                    <div className={`w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 shadow-sm
+                      ${dish.is_correct === true ? 'ring-2 ring-green-500 ring-inset' : dish.is_correct === false ? 'ring-2 ring-red-500 ring-inset' : ''}
+                    `}>
                       <img src={getImageUrl(dish.image_url)} alt={dish.dish_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
                     </div>
                     <div className="flex-grow min-w-0">
@@ -220,7 +224,10 @@ export default function DishDetail() {
                 <h4 className="text-3xl font-bold italic tracking-tight">Tìm quán {dish_name}</h4>
                 <p className="text-on-surface-variant text-lg leading-relaxed font-body">Tìm kiếm các địa điểm phục vụ {dish_name} quanh khu vực của bạn.</p>
               </div>
-              <button className="w-full bg-on-surface text-white py-6 rounded-full font-bold text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-primary transition-all active:scale-95 flex items-center justify-center gap-4">
+              <button 
+                onClick={() => window.open(`https://www.google.com/search?q=quán+${encodeURIComponent(dish_name)}+gần+đây`, '_blank')}
+                className="w-full bg-on-surface text-white py-6 rounded-full font-bold text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-primary transition-all active:scale-95 flex items-center justify-center gap-4"
+              >
                 Tìm nhà hàng gần đây <ArrowRight size={20} />
               </button>
             </div>
